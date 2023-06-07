@@ -1,5 +1,6 @@
 import logging
 import urllib
+import ast
 from http import HTTPStatus
 
 from django.views.decorators.csrf import csrf_exempt
@@ -36,6 +37,8 @@ LTI_1P3_ACCESS_TOKEN_SCOPES = [
     "https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly",
 ]
 
+LTI_CONFIG_404_MESSAGE = "Can't find LTI external configuration with ID %s"
+
 
 @csrf_exempt
 @xframe_options_sameorigin
@@ -63,10 +66,7 @@ def access_token_endpoint(request, lti_config_id):
     try:
         config = ExternalLtiConfiguration.objects.get(id=lti_config_id)
     except ExternalLtiConfiguration.DoesNotExist as exc:
-        log.warning(
-            "Can't find LTI external configuration with ID %s",
-            lti_config_id,
-        )
+        log.warning(LTI_CONFIG_404_MESSAGE, lti_config_id)
         raise Http404 from exc
 
     if config.version != LTIVersion.LTI_1P3:
@@ -155,3 +155,38 @@ def access_token_endpoint(request, lti_config_id):
             {"error": "unsupported_grant_type"},
             status=HTTPStatus.BAD_REQUEST,
         )
+
+
+@require_http_methods(["GET"])
+def public_keyset_endpoint(request, lti_config_id):
+    """Gate endpoint to fetch public keysets.
+
+    Arguments:
+        lti_config_id (int): ID of the LTI external configuration
+
+    Returns:
+        JsonResponse with public keyset
+
+    Raises:
+        Http404: LTI external configuration is not found
+
+    """
+    try:
+        config = ExternalLtiConfiguration.objects.get(id=lti_config_id)
+
+        if config.version != LTIVersion.LTI_1P3:
+            return JsonResponse(
+                {"error": "invalid_lti_version"},
+                status=HTTPStatus.BAD_REQUEST,
+            )
+
+        # Return public JWK.
+        response = JsonResponse(
+            ast.literal_eval(config.lti_1p3_public_jwk),
+            headers={"Content-Disposition": "attachment; filename=keyset.json"},
+        )
+
+        return response
+    except ExternalLtiConfiguration.DoesNotExist as exc:
+        log.warning(LTI_CONFIG_404_MESSAGE, lti_config_id)
+        raise Http404 from exc
