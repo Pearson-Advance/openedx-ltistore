@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from unittest.mock import patch, call
 from lti_store.models import ExternalLtiConfiguration, LTIVersion, MESSAGES
+from lti_store.key_handlers import PlatformKeyHandler
 
 
 class LTIConfigurationTestCase(TestCase):
@@ -97,9 +98,10 @@ class LTIConfigurationTestCase(TestCase):
             ),
         )
 
-    @patch("lti_store.models.get_public_jwk")
+    @patch.object(PlatformKeyHandler, "get_public_jwk")
+    @patch.object(PlatformKeyHandler, "__init__", return_value=None)
     @patch("lti_store.models.uuid.uuid4")
-    def test_1p3_save(self, uuid4_mock, get_public_jwk_mock):
+    def test_1p3_save(self, uuid4_mock, platform_key_handler_mock, get_public_jwk_mock):
         """Test save method on a LTI 1.3 configuration."""
         uuid4_mock.return_value = self.UUID4
         get_public_jwk_mock.return_value = self.PUBLIC_JWK
@@ -116,6 +118,8 @@ class LTIConfigurationTestCase(TestCase):
         self.assertEqual(config.lti_1p3_private_key_id, self.UUID4)
         self.assertEqual(config.lti_1p3_public_jwk, self.PUBLIC_JWK)
         uuid4_mock.assert_has_calls([call(), call()])
-        get_public_jwk_mock.assert_called_once_with(
-            self.PRIVATE_KEY, config.lti_1p3_private_key_id,
+        platform_key_handler_mock.assert_called_once_with(
+            key_pem=self.PRIVATE_KEY,
+            key_id=config.lti_1p3_private_key_id,
         )
+        get_public_jwk_mock.assert_called_once_with()
