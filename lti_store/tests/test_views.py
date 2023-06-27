@@ -249,3 +249,70 @@ class TestAccessTokenEndpointView(TestCase):
             '{"error": "unsupported_grant_type"}',
         )
         self.assertEqual(response.status_code, HTTPStatus.BAD_REQUEST)
+
+
+class TestPublicKeysetEndpointView(TestCase):
+    """Test public keyset endpoint view."""
+
+    def setUp(self):
+        """Test fixtures setup."""
+        self.client = Client()
+        self.url = reverse("public_keyset", kwargs={"lti_config_id": CONFIG_ID})
+        self.external_config = Mock(
+            version=LTIVersion.LTI_1P3,
+            lti_1p3_public_jwk={"test": "test"},
+        )
+
+    @patch.object(ExternalLtiConfiguration, "objects")
+    @patch("lti_store.views.ast.literal_eval")
+    def test_public_keyset_request(
+        self,
+        literal_eval_mock,
+        objects_mock,
+    ):
+        """Test public keyset request."""
+        objects_mock.get.return_value = self.external_config
+        literal_eval_mock.return_value = self.external_config.lti_1p3_public_jwk
+        response = self.client.get(self.url)
+
+        self.assertJSONEqual(
+            response.content,
+            self.external_config.lti_1p3_public_jwk,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers["Content-Disposition"], "attachment; filename=keyset.json"
+        )
+        objects_mock.get.assert_called_once_with(id=CONFIG_ID)
+        literal_eval_mock.assert_called_once_with(
+            self.external_config.lti_1p3_public_jwk
+        )
+
+    @patch.object(ExternalLtiConfiguration, "objects")
+    @patch("lti_store.views.log.warning")
+    def test_invalid_config_id(self, warning_mock, objects_mock):
+        """Test request with invalid external configuration ID."""
+        objects_mock.get.side_effect = ExternalLtiConfiguration.DoesNotExist
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 404)
+        warning_mock.assert_called_once_with(
+            "Can't find LTI external configuration with ID %s",
+            CONFIG_ID,
+        )
+
+    @patch.object(ExternalLtiConfiguration, "objects")
+    def test_invalid_lti_version(self, objects_mock):
+        """Test request with invalid external configuration version."""
+        self.external_config.version = LTIVersion.LTI_1P1
+        objects_mock.get.return_value = self.external_config
+
+        response = self.client.get(self.url)
+
+        self.assertJSONEqual(
+            response.content,
+            {"error": "invalid_lti_version"},
+        )
+        self.assertEqual(response.status_code, HTTPStatus.BAD_REQUEST)
