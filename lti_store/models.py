@@ -1,11 +1,10 @@
 import uuid
-import json
+
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from Cryptodome.PublicKey import RSA
-from jwkest import jwk
-from jwkest.jwk import RSAKey
+from lti_store.key_handlers import PlatformKeyHandler
 
 
 MESSAGES = {
@@ -23,14 +22,6 @@ def validate_private_key(key):
         raise ValidationError(_(MESSAGES["invalid_private_key"]))
 
     return key
-
-
-def get_public_jwk(pem, kid):
-    """Generate public JWK."""
-    public_keys = jwk.KEYS()
-    public_keys.append(RSAKey(kid=kid, key=RSA.import_key(pem)))
-
-    return json.loads(public_keys.dump_jwks())
 
 
 class LTIVersion(models.TextChoices):
@@ -151,9 +142,10 @@ class ExternalLtiConfiguration(models.Model):
                 self.lti_1p3_private_key_id = str(uuid.uuid4())
 
             # Regenerate public JWK.
-            self.lti_1p3_public_jwk = get_public_jwk(
-                self.lti_1p3_private_key,
-                self.lti_1p3_private_key_id,
+            key_handler = PlatformKeyHandler(
+                key_pem=self.lti_1p3_private_key,
+                key_id=self.lti_1p3_private_key_id,
             )
+            self.lti_1p3_public_jwk = key_handler.get_public_jwk()
 
         super().save(*args, **kwargs)
