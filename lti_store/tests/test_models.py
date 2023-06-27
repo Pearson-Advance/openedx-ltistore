@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from unittest.mock import patch, call
+from lti_store.apps import LtiStoreConfig
 from lti_store.models import ExternalLtiConfiguration, LTIVersion, MESSAGES
 from lti_store.key_handlers import PlatformKeyHandler
 
@@ -123,3 +124,41 @@ class LTIConfigurationTestCase(TestCase):
             key_id=config.lti_1p3_private_key_id,
         )
         get_public_jwk_mock.assert_called_once_with()
+
+    @patch("lti_store.models.get_lti_api_base")
+    @patch("lti_store.models.urllib.parse.urljoin", return_value="test-token-url")
+    @patch.object(LtiStoreConfig, "name", return_value="test_app_name")
+    def test_lti_1p3_access_token_url_property(
+        self,
+        app_name_mock,
+        urljoin_mock,
+        get_lti_api_base_mock,
+    ):
+        """Test LTI 1.3 access token url property."""
+        config = ExternalLtiConfiguration.objects.create(**self.REQUIRED_FIELDS)
+
+        self.assertEqual(config.lti_1p3_access_token_url, "test-token-url")
+        get_lti_api_base_mock.assert_called_once_with()
+        urljoin_mock.assert_called_once_with(
+            get_lti_api_base_mock(),
+            f"/{app_name_mock}/token/{config.pk}",
+        )
+
+    @patch("lti_store.models.get_lti_api_base")
+    @patch("lti_store.models.urllib.parse.urljoin", return_value="test-keyset-url")
+    @patch.object(LtiStoreConfig, "name", return_value="test_app_name")
+    def test_lti_1p3_keyset_url_property(
+        self,
+        app_name_mock,
+        urljoin_mock,
+        get_lti_api_base_mock,
+    ):
+        """Test LTI 1.3 keyset url property."""
+        config = ExternalLtiConfiguration.objects.create(**self.REQUIRED_FIELDS)
+
+        self.assertEqual(config.lti_1p3_keyset_url, "test-keyset-url")
+        get_lti_api_base_mock.assert_called_once_with()
+        urljoin_mock.assert_called_once_with(
+            get_lti_api_base_mock(),
+            f"/{app_name_mock}/public_keyset/{config.pk}",
+        )
