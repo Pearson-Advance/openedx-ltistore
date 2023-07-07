@@ -37,16 +37,23 @@ class GetLtiConfigurations(PipelineStep):
             try:
                 config_object = ExternalLtiConfiguration.objects.get(slug=_slug)
                 config = {
-                    f"{self.PLUGIN_PREFIX}:{config_object.slug}": model_to_dict(
-                        config_object
-                    )
+                    f"{self.PLUGIN_PREFIX}:{config_object.slug}": {
+                        **model_to_dict(config_object),
+                        "lti_1p3_keyset_url": config_object.lti_1p3_keyset_url,
+                        "lti_1p3_access_token_url": config_object.lti_1p3_access_token_url,
+                    },
                 }
             except ExternalLtiConfiguration.DoesNotExist:
                 config = {}
         else:
             config_objs = ExternalLtiConfiguration.objects.all()
             config = {
-                f"{self.PLUGIN_PREFIX}:{c.slug}": model_to_dict(c) for c in config_objs
+                f"{self.PLUGIN_PREFIX}:{config_obj.slug}": {
+                    **model_to_dict(config_obj),
+                    "lti_1p3_keyset_url": config_obj.lti_1p3_keyset_url,
+                    "lti_1p3_access_token_url": config_obj.lti_1p3_access_token_url,
+                }
+                for config_obj in config_objs
             }
 
         configurations.update(config)
